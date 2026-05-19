@@ -24,7 +24,7 @@ jobs:
   # -----------------------------------------------------------
   hello:
     name: "👋 Say Hello"
-    runs-on: ubuntu-latest   # Use GitHub-hosted Ubuntu runner
+    runs-on: ubuntu-latest # Use GitHub-hosted Ubuntu runner
 
     steps:
       # Step 1: Check out the repository code
@@ -57,6 +57,12 @@ jobs:
           echo ""
           echo "=== Frontend (todo-frontend/) ==="
           ls todo-frontend/ || echo "No todo-frontend directory found"
+  Bye:
+    name: "👋 Say Goodbye"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Goodbye"
+        run: echo "Goodbye from GitHub Actions!"
 
 # ============================================================
 # ✅ PRACTICE TASKS:
