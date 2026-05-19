@@ -14,5 +14,5 @@ public class Signup {
     private Long id;
     private String username;
     private String email;
-    private String password;
+    private Integer password;
 }
