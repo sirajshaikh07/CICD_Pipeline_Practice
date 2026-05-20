@@ -1,0 +1,10 @@
+name: "Login Branch"
+on:
+    push:
+        branches: [loginpage]
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - name: "Checkout Code"
+              run: echo "login page changes"
