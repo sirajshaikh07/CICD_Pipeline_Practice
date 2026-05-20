@@ -1,0 +1,73 @@
+# ============================================================
+# LAB 01 — HELLO WORLD
+# ============================================================
+# 🎯 Goal: Understand the basic anatomy of a GitHub Actions workflow
+#
+# Concepts Covered:
+#   - Workflow file location (.github/workflows/)
+#   - name, on, jobs, steps, runs-on
+#   - Using 'run' to execute shell commands
+#   - Using 'actions/checkout' to clone repo
+#
+# 📖 Docs: https://docs.github.com/en/actions/quickstart
+# ============================================================
+
+name: "Lab 01 — Hello World"
+
+# TRIGGER: This workflow runs on every push to any branch
+on: [push]
+
+jobs:
+  # -----------------------------------------------------------
+  # JOB 1: hello
+  # Each job runs on a fresh virtual machine (runner)
+  # -----------------------------------------------------------
+  hello:
+    name: "👋 Say Hello"
+    runs-on: ubuntu-latest # Use GitHub-hosted Ubuntu runner
+
+    steps:
+      # Step 1: Check out the repository code
+      - name: "📥 Checkout Code"
+        uses: actions/checkout@v4
+
+      # Step 2: Print a greeting
+      - name: "👋 Hello World"
+        run: echo "Hello, World! 🌍 Welcome to GitHub Actions!"
+
+      # Step 3: Print useful context information
+      - name: "📋 Show Context Info"
+        run: |
+          echo "🔹 Repository:  ${{ github.repository }}"
+          echo "🔹 Branch:      ${{ github.ref_name }}"
+          echo "🔹 Commit SHA:  ${{ github.sha }}"
+          echo "🔹 Actor:       ${{ github.actor }}"
+          echo "🔹 Event:       ${{ github.event_name }}"
+          echo "🔹 Runner OS:   ${{ runner.os }}"
+          echo "🔹 Workspace:   ${{ github.workspace }}"
+
+      # Step 4: List repository files
+      - name: "📂 List Project Files"
+        run: |
+          echo "=== Repository Root ==="
+          ls -la
+          echo ""
+          echo "=== Backend (cicd/) ==="
+          ls cicd/ || echo "No cicd directory found"
+          echo ""
+          echo "=== Frontend (todo-frontend/) ==="
+          ls todo-frontend/ || echo "No todo-frontend directory found"
+  Bye:
+    name: "👋 Say Goodbye"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Goodbye"
+        run: echo "Goodbye from GitHub Actions!"
+
+# ============================================================
+# ✅ PRACTICE TASKS:
+#   1. Push this file → go to Actions tab → watch the run
+#   2. Click into the job → expand each step → read the logs
+#   3. CHALLENGE: Add a 2nd job "goodbye" that prints "Goodbye!"
+#   4. CHALLENGE: Add a step that prints the current date
+# ============================================================

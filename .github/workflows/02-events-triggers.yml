@@ -1,0 +1,114 @@
+# ============================================================
+# LAB 02 — EVENTS & TRIGGERS
+# ============================================================
+# 🎯 Goal: Master different ways to trigger workflows
+#
+# Concepts Covered:
+#   - push (with branch/path filters)
+#   - pull_request
+#   - workflow_dispatch (manual trigger with inputs)
+#   - schedule (cron)
+#   - Path filtering (paths / paths-ignore)
+#
+# 📖 Docs: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows
+# ============================================================
+
+name: "Lab 02 — Events & Triggers"
+
+on:
+  # TRIGGER 1: Push — only on main branch, only when non-docs change
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"        # Skip when only markdown files change
+      - "docs/**"      # Skip when only docs folder changes
+
+  # TRIGGER 2: Pull Request — on open, sync, or reopen
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+  # TRIGGER 3: Manual — allows you to run from the Actions tab
+  workflow_dispatch:
+    inputs:
+      greeting_name:
+        description: "Who should we greet?"
+        required: true
+        default: "Developer"
+        type: string
+      log_level:
+        description: "Log verbosity level"
+        required: false
+        default: "info"
+        type: choice
+        options:
+          - info
+          - debug
+          - warning
+      dry_run:
+        description: "Run without side effects?"
+        required: false
+        default: false
+        type: boolean
+
+  # TRIGGER 4: Schedule — runs on a cron schedule (UTC)
+  # This runs every Sunday at midnight UTC
+  # Uncomment to activate:
+  # schedule:
+  #   - cron: "0 0 * * 0"
+
+jobs:
+  # -----------------------------------------------------------
+  # JOB: Show which event triggered this run
+  # -----------------------------------------------------------
+  identify-trigger:
+    name: "🔍 Identify Trigger"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v4
+
+      - name: "🔍 What triggered this?"
+        run: |
+          echo "============================================"
+          echo "  EVENT: ${{ github.event_name }}"
+          echo "============================================"
+          echo ""
+          echo "🔹 Ref:       ${{ github.ref }}"
+          echo "🔹 SHA:       ${{ github.sha }}"
+          echo "🔹 Actor:     ${{ github.actor }}"
+          echo "🔹 Workflow:  ${{ github.workflow }}"
+          echo "🔹 Run ID:    ${{ github.run_id }}"
+          echo "🔹 Run #:     ${{ github.run_number }}"
+
+      # This step only runs for manual triggers
+      - name: "🎤 Manual Trigger Greeting"
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "👋 Hello, ${{ inputs.greeting_name }}!"
+          echo "📊 Log Level: ${{ inputs.log_level }}"
+          echo "🧪 Dry Run:   ${{ inputs.dry_run }}"
+
+      # This step only runs for pull requests
+      - name: "🔀 Pull Request Info"
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "PR #${{ github.event.pull_request.number }}"
+          echo "Title: ${{ github.event.pull_request.title }}"
+          echo "From:  ${{ github.head_ref }} → ${{ github.base_ref }}"
+
+      # This step only runs for push events
+      - name: "📤 Push Info"
+        if: github.event_name == 'push'
+        run: |
+          echo "Pushed to: ${{ github.ref_name }}"
+          echo "Commit message: ${{ github.event.head_commit.message }}"
+
+# ============================================================
+# ✅ PRACTICE TASKS:
+#   1. Trigger manually from Actions tab → provide a custom name
+#   2. Push to a feature branch → verify push trigger fires
+#   3. Create a PR → verify pull_request trigger fires
+#   4. CHALLENGE: Add paths filter to only trigger on cicd/** changes
+#   5. CHALLENGE: Uncomment schedule & set to your preferred time
+# ============================================================
