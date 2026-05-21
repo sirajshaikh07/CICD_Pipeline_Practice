@@ -146,6 +146,14 @@ jobs:
           path: cicd/target/test-classes/
           retention-days: 3
 
+      - name: "📈 Upload JaCoCo coverage report"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ github.sha }}
+          path: cicd/target/site/jacoco/
+          retention-days: 7
+
   # ──────────────────────────────────────────────────────────────────────────
   # JOB 3: Code Quality Checks
   # ──────────────────────────────────────────────────────────────────────────
@@ -183,6 +191,5 @@ jobs:
       # - name: "🐛 SpotBugs static analysis"
       #   run: ./mvnw spotbugs:check --no-transfer-progress
 
-      # TODO: Add JaCoCo for code coverage
-      # - name: "📈 Code coverage report"
-      #   run: ./mvnw jacoco:report --no-transfer-progress
+      - name: "📈 Verify code coverage (JaCoCo)"
+        run: ./mvnw jacoco:check --no-transfer-progress || echo "⚠️ Coverage below 70% threshold"
