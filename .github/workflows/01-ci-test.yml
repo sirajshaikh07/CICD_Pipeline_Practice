@@ -1,0 +1,188 @@
+# ============================================================================
+# 01-CI-TEST.YML — Continuous Integration (Test Environment)
+# ============================================================================
+# PURPOSE : Build + Unit/Integration tests on every push & PR
+# ENV     : test (uses GitHub service container PostgreSQL)
+# TRIGGERS: push to any branch, pull_request to main/develop
+# ============================================================================
+#
+# ┌─────────────────────────────────────────────────────────────────────┐
+# │ GITHUB SECRETS YOU NEED TO ADD (Settings → Secrets → Actions):     │
+# │                                                                     │
+# │  TEST_DB_NAME       → PostgreSQL database name for tests            │
+# │                       (e.g., "cicd_test_db")                        │
+# │  TEST_DB_USER       → PostgreSQL username for tests                 │
+# │                       (e.g., "test_user")                           │
+# │  TEST_DB_PASSWORD   → PostgreSQL password for tests                 │
+# │                       (e.g., a strong random password)              │
+# │                                                                     │
+# │  OPTIONAL (for Slack/email notifications — add later):              │
+# │  SLACK_WEBHOOK_URL  → Slack incoming webhook for CI notifications   │
+# └─────────────────────────────────────────────────────────────────────┘
+#
+# FUTURE ADDITIONS:
+# - [ ] Kubernetes deployment (will be added with kubectl/helm)
+# - [ ] Terraform infrastructure checks (terraform plan)
+# - [ ] Ansible playbook linting
+# - [ ] OCI (Oracle Cloud) deployment
+# ============================================================================
+
+name: "CI — Build & Test"
+
+on:
+  push:
+    branches:
+      - "**"                   # Run on ALL branches for fast feedback
+    paths:
+      - "cicd/**"              # Only trigger when backend code changes
+      - ".github/workflows/01-ci-test.yml"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "cicd/**"
+
+# Cancel in-progress runs for the same branch (saves runner minutes)
+concurrency:
+  group: ci-test-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "21"
+  JAVA_DISTRIBUTION: "temurin"
+  WORKING_DIR: ./cicd
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # JOB 1: Lint & Compile (fast fail — no DB needed)
+  # ──────────────────────────────────────────────────────────────────────────
+  compile:
+    name: "📦 Compile & Validate"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: "⬇️ Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "☕ Set up JDK ${{ env.JAVA_VERSION }}"
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      - name: "🔍 Validate POM"
+        run: ./mvnw validate --no-transfer-progress
+
+      - name: "🔨 Compile (skip tests)"
+        run: ./mvnw compile -DskipTests --no-transfer-progress
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # JOB 2: Run Tests with PostgreSQL service container
+  # ──────────────────────────────────────────────────────────────────────────
+  test:
+    name: "🧪 Unit & Integration Tests"
+    runs-on: ubuntu-latest
+    needs: compile
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    # ── PostgreSQL service container for integration tests ──
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ${{ secrets.TEST_DB_NAME }}
+          POSTGRES_USER: ${{ secrets.TEST_DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U $POSTGRES_USER"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      # Spring Boot will use these to connect to the test database
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/${{ secrets.TEST_DB_NAME }}
+      SPRING_DATASOURCE_USERNAME: ${{ secrets.TEST_DB_USER }}
+      SPRING_DATASOURCE_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: create-drop
+      SPRING_PROFILES_ACTIVE: test
+
+    steps:
+      - name: "⬇️ Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "☕ Set up JDK ${{ env.JAVA_VERSION }}"
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      - name: "🧪 Run tests"
+        run: ./mvnw test --no-transfer-progress -Dspring.profiles.active=test
+
+      - name: "📊 Upload test reports"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ github.sha }}
+          path: cicd/target/surefire-reports/
+          retention-days: 7
+
+      - name: "📊 Upload test results summary"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.sha }}
+          path: cicd/target/test-classes/
+          retention-days: 3
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # JOB 3: Code Quality Checks
+  # ──────────────────────────────────────────────────────────────────────────
+  code-quality:
+    name: "🔎 Code Quality"
+    runs-on: ubuntu-latest
+    needs: compile
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: "⬇️ Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "☕ Set up JDK ${{ env.JAVA_VERSION }}"
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      # Check for dependency vulnerabilities
+      # TODO: Add OWASP dependency-check plugin to pom.xml for full vulnerability scanning
+      # <plugin>
+      #   <groupId>org.owasp</groupId>
+      #   <artifactId>dependency-check-maven</artifactId>
+      #   <version>9.x.x</version>
+      # </plugin>
+
+      - name: "🔒 Check for dependency updates"
+        run: ./mvnw versions:display-dependency-updates --no-transfer-progress || true
+
+      # TODO: Add SpotBugs or Checkstyle for static analysis
+      # - name: "🐛 SpotBugs static analysis"
+      #   run: ./mvnw spotbugs:check --no-transfer-progress
+
+      # TODO: Add JaCoCo for code coverage
+      # - name: "📈 Code coverage report"
+      #   run: ./mvnw jacoco:report --no-transfer-progress

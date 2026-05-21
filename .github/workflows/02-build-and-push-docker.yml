@@ -1,0 +1,184 @@
+# ============================================================================
+# 02-BUILD-AND-PUSH-DOCKER.YML — Build Docker Image & Push to Docker Hub
+# ============================================================================
+# PURPOSE : Package the app as a Docker image, push to Docker Hub
+# ENV     : Runs after CI passes on main or develop
+# TRIGGERS: push to main/develop (after tests pass)
+# ============================================================================
+#
+# ┌─────────────────────────────────────────────────────────────────────┐
+# │ GITHUB SECRETS YOU NEED TO ADD (Settings → Secrets → Actions):     │
+# │                                                                     │
+# │  DOCKERHUB_USERNAME  → Your Docker Hub username                     │
+# │                        (e.g., "sirajshaikh07")                      │
+# │  DOCKERHUB_TOKEN     → Docker Hub Access Token (NOT your password)  │
+# │                        Go to: hub.docker.com → Account Settings     │
+# │                        → Security → New Access Token               │
+# │                        (e.g., "dckr_pat_xxxxxxxxxxxx")              │
+# │  DOCKERHUB_REPO      → Docker Hub repository name                  │
+# │                        (e.g., "sirajshaikh07/cicd-backend")         │
+# │                                                                     │
+# │  (Test DB secrets are also needed — same as 01-ci-test.yml)         │
+# │  TEST_DB_NAME         → PostgreSQL database name for tests          │
+# │  TEST_DB_USER         → PostgreSQL username for tests               │
+# │  TEST_DB_PASSWORD     → PostgreSQL password for tests               │
+# └─────────────────────────────────────────────────────────────────────┘
+#
+# FUTURE ADDITIONS:
+# - [ ] Push to OCI Container Registry (Oracle Cloud)
+# - [ ] Push to GitHub Container Registry (ghcr.io)
+# - [ ] Trivy / Snyk container vulnerability scanning
+# - [ ] Sign images with Cosign/Sigstore
+# ============================================================================
+
+name: "Build & Push Docker Image"
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "cicd/**"
+      - "cicd/Dockerfile"
+      - ".github/workflows/02-build-and-push-docker.yml"
+
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "21"
+  JAVA_DISTRIBUTION: "temurin"
+  WORKING_DIR: ./cicd
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # JOB 1: Run CI Tests first (gate before building image)
+  # ──────────────────────────────────────────────────────────────────────────
+  ci-gate:
+    name: "🧪 CI Gate — Run Tests"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ${{ secrets.TEST_DB_NAME }}
+          POSTGRES_USER: ${{ secrets.TEST_DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U $POSTGRES_USER"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/${{ secrets.TEST_DB_NAME }}
+      SPRING_DATASOURCE_USERNAME: ${{ secrets.TEST_DB_USER }}
+      SPRING_DATASOURCE_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: create-drop
+      SPRING_PROFILES_ACTIVE: test
+
+    steps:
+      - name: "⬇️ Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "☕ Set up JDK ${{ env.JAVA_VERSION }}"
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      - name: "🧪 Run tests"
+        run: ./mvnw test --no-transfer-progress
+
+      - name: "📦 Package JAR (skip tests — already passed)"
+        run: ./mvnw package -DskipTests --no-transfer-progress
+
+      - name: "📤 Upload JAR artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar-${{ github.sha }}
+          path: cicd/target/*.jar
+          retention-days: 1
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # JOB 2: Build & Push Docker Image to Docker Hub
+  # ──────────────────────────────────────────────────────────────────────────
+  docker-build-push:
+    name: "🐳 Build & Push Docker Image"
+    runs-on: ubuntu-latest
+    needs: ci-gate
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: "⬇️ Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "☕ Set up JDK ${{ env.JAVA_VERSION }}"
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      - name: "📦 Package JAR"
+        run: ./mvnw package -DskipTests --no-transfer-progress
+
+      # ── Docker Setup ──
+      - name: "🔧 Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v3
+
+      - name: "🔑 Login to Docker Hub"
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # ── Generate image tags ──
+      - name: "🏷️ Generate Docker metadata (tags & labels)"
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_REPO }}
+          tags: |
+            # Tag with branch name
+            type=ref,event=branch
+            # Tag with short SHA
+            type=sha,prefix=
+            # Tag 'latest' only on main
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # Tag with timestamp for unique versioning
+            type=raw,value=${{ github.ref_name }}-{{date 'YYYYMMDD-HHmmss'}}
+
+      # ── Build & Push ──
+      - name: "🐳 Build and push Docker image"
+        uses: docker/build-push-action@v5
+        with:
+          context: ./cicd
+          file: ./cicd/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # TODO: Add multi-platform builds when needed
+          # platforms: linux/amd64,linux/arm64
+
+      - name: "✅ Image pushed successfully"
+        run: |
+          echo "============================================"
+          echo "🐳 Docker image pushed to Docker Hub!"
+          echo "============================================"
+          echo "Tags:"
+          echo "${{ steps.meta.outputs.tags }}"
+          echo "============================================"

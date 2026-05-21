@@ -1,0 +1,176 @@
+# ============================================================================
+# 04-DEPLOY-PROD.YML — Deploy to PRODUCTION Environment
+# ============================================================================
+# SECRETS NEEDED:
+#   DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, DOCKERHUB_REPO
+#   PROD_DB_HOST, PROD_DB_PORT, PROD_DB_NAME, PROD_DB_USER, PROD_DB_PASSWORD
+#   PROD_SERVER_HOST, PROD_SERVER_USER, PROD_SERVER_SSH_KEY
+#   (Optional) SLACK_WEBHOOK_URL — for deployment notifications
+#
+# FUTURE: Kubernetes, Terraform, Ansible, OCI deployment
+# ============================================================================
+
+name: "Deploy → PRODUCTION 🔒"
+
+on:
+  # PRODUCTION deployments require manual approval — no auto-deploy!
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag to deploy (e.g., latest, sha-abc1234)"
+        required: true
+        default: "latest"
+      confirm_deploy:
+        description: "Type 'DEPLOY-PROD' to confirm production deployment"
+        required: true
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false     # NEVER cancel prod deployments
+
+env:
+  DEPLOY_ENV: production
+  APP_PORT: 8080
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────
+  # JOB 1: Safety gate — validate confirmation
+  # ──────────────────────────────────────────────────────────────────────
+  validate:
+    name: "🔐 Validate Deployment Request"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "🔐 Verify deployment confirmation"
+        run: |
+          if [ "${{ github.event.inputs.confirm_deploy }}" != "DEPLOY-PROD" ]; then
+            echo "❌ ERROR: You must type 'DEPLOY-PROD' to confirm."
+            echo "   You entered: '${{ github.event.inputs.confirm_deploy }}'"
+            exit 1
+          fi
+          echo "✅ Production deployment confirmed by ${{ github.actor }}"
+
+  # ──────────────────────────────────────────────────────────────────────
+  # JOB 2: Deploy to PRODUCTION
+  # ──────────────────────────────────────────────────────────────────────
+  deploy-prod:
+    name: "🚀 Deploy to PRODUCTION"
+    runs-on: ubuntu-latest
+    needs: validate
+    environment:
+      name: production
+      url: "http://${{ secrets.PROD_SERVER_HOST }}:8080"
+
+    steps:
+      - name: "⬇️ Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "📋 Deployment info"
+        run: |
+          echo "============================================"
+          echo "🚀 PRODUCTION DEPLOYMENT"
+          echo "============================================"
+          echo "Image: ${{ secrets.DOCKERHUB_REPO }}:${{ github.event.inputs.image_tag }}"
+          echo "Deployed by: ${{ github.actor }}"
+          echo "Time: $(date -u)"
+          echo "============================================"
+
+      - name: "🔑 Deploy to production server via SSH"
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          script: |
+            set -e
+
+            IMAGE="${{ secrets.DOCKERHUB_REPO }}:${{ github.event.inputs.image_tag }}"
+
+            echo "📥 Pulling image: $IMAGE"
+            docker pull $IMAGE
+
+            # Keep old container for rollback
+            docker rename cicd-backend-prod cicd-backend-prod-rollback 2>/dev/null || true
+
+            echo "🚀 Starting new container..."
+            docker run -d \
+              --name cicd-backend-prod \
+              --restart unless-stopped \
+              -p ${{ env.APP_PORT }}:8080 \
+              -e SPRING_PROFILES_ACTIVE=prod \
+              -e SPRING_DATASOURCE_URL=jdbc:postgresql://${{ secrets.PROD_DB_HOST }}:${{ secrets.PROD_DB_PORT }}/${{ secrets.PROD_DB_NAME }} \
+              -e SPRING_DATASOURCE_USERNAME=${{ secrets.PROD_DB_USER }} \
+              -e SPRING_DATASOURCE_PASSWORD=${{ secrets.PROD_DB_PASSWORD }} \
+              -e SPRING_JPA_HIBERNATE_DDL_AUTO=validate \
+              -e SERVER_PORT=8080 \
+              $IMAGE
+
+            # Wait and verify
+            sleep 15
+            if docker ps | grep -q cicd-backend-prod; then
+              echo "✅ Container is running!"
+              # Remove rollback container
+              docker stop cicd-backend-prod-rollback 2>/dev/null || true
+              docker rm cicd-backend-prod-rollback 2>/dev/null || true
+            else
+              echo "❌ Container failed! Rolling back..."
+              docker rm cicd-backend-prod 2>/dev/null || true
+              docker rename cicd-backend-prod-rollback cicd-backend-prod
+              docker start cicd-backend-prod
+              exit 1
+            fi
+
+            docker image prune -f
+
+      # FUTURE: Kubernetes production deployment (uncomment when ready)
+      # - name: "☸️ Deploy to K8s production"
+      #   run: |
+      #     kubectl set image deployment/cicd-backend \
+      #       cicd-backend=${{ secrets.DOCKERHUB_REPO }}:${{ github.event.inputs.image_tag }} \
+      #       -n production
+      #     kubectl rollout status deployment/cicd-backend -n production --timeout=300s
+
+  # ──────────────────────────────────────────────────────────────────────
+  # JOB 3: Production Smoke Tests
+  # ──────────────────────────────────────────────────────────────────────
+  smoke-test-prod:
+    name: "🔥 Production Smoke Tests"
+    runs-on: ubuntu-latest
+    needs: deploy-prod
+    steps:
+      - name: "⏳ Wait for startup"
+        run: sleep 30
+
+      - name: "🏥 Health check"
+        run: |
+          for i in {1..15}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              http://${{ secrets.PROD_SERVER_HOST }}:8080/actuator/health || echo "000")
+            if [ "$STATUS" == "200" ]; then
+              echo "✅ Production health check PASSED!"
+              exit 0
+            fi
+            echo "⏳ Attempt $i/15 — Status: $STATUS"
+            sleep 10
+          done
+          echo "❌ PRODUCTION HEALTH CHECK FAILED!"
+          exit 1
+
+  # ──────────────────────────────────────────────────────────────────────
+  # JOB 4: Notify on completion (optional — needs SLACK_WEBHOOK_URL)
+  # ──────────────────────────────────────────────────────────────────────
+  # notify:
+  #   name: "📢 Notify Team"
+  #   runs-on: ubuntu-latest
+  #   needs: [deploy-prod, smoke-test-prod]
+  #   if: always()
+  #   steps:
+  #     - name: "📢 Slack notification"
+  #       uses: 8398a7/action-slack@v3
+  #       with:
+  #         status: ${{ job.status }}
+  #         text: |
+  #           Production deployment ${{ needs.deploy-prod.result }}
+  #           Image: ${{ github.event.inputs.image_tag }}
+  #           By: ${{ github.actor }}
+  #       env:
+  #         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
