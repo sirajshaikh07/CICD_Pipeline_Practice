@@ -30,7 +30,6 @@
 name: "CI — Build & Test"
 
 on:
-  workflow_dispatch:  # Allows manual triggering from GitHub Actions UI
   push:
     branches:
       - "**" # Run on ALL branches for fast feedback
