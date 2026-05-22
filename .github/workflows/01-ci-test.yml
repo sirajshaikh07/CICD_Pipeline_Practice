@@ -32,9 +32,9 @@ name: "CI — Build & Test"
 on:
   push:
     branches:
-      - "**"                   # Run on ALL branches for fast feedback
+      - "**" # Run on ALL branches for fast feedback
     paths:
-      - "cicd/**"              # Only trigger when backend code changes
+      - "cicd/**" # Only trigger when backend code changes
       - ".github/workflows/01-ci-test.yml"
   pull_request:
     branches:
