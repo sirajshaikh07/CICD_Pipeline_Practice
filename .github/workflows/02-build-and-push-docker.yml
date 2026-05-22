@@ -34,6 +34,7 @@
 name: "Build & Push Docker Image"
 
 on:
+  workflow_dispatch: # Allows manual triggering from GitHub Actions UI
   push:
     branches:
       - master
