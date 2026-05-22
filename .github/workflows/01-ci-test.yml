@@ -3,7 +3,7 @@
 # ============================================================================
 # PURPOSE : Build + Unit/Integration tests on every push & PR
 # ENV     : test (uses GitHub service container PostgreSQL)
-# TRIGGERS: push to any branch, pull_request to main/develop
+# TRIGGERS: push to any branch, pull_request to master/develop
 # ============================================================================
 #
 # ┌─────────────────────────────────────────────────────────────────────┐
@@ -38,7 +38,7 @@ on:
       - ".github/workflows/01-ci-test.yml"
   pull_request:
     branches:
-      - main
+      - master
       - develop
     paths:
       - "cicd/**"

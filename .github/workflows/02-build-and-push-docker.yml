@@ -2,8 +2,8 @@
 # 02-BUILD-AND-PUSH-DOCKER.YML — Build Docker Image & Push to Docker Hub
 # ============================================================================
 # PURPOSE : Package the app as a Docker image, push to Docker Hub
-# ENV     : Runs after CI passes on main or develop
-# TRIGGERS: push to main/develop (after tests pass)
+# ENV     : Runs after CI passes on master or develop
+# TRIGGERS: push to master/develop (after tests pass)
 # ============================================================================
 #
 # ┌─────────────────────────────────────────────────────────────────────┐
@@ -36,7 +36,7 @@ name: "Build & Push Docker Image"
 on:
   push:
     branches:
-      - main
+      - master
       - develop
     paths:
       - "cicd/**"
@@ -155,8 +155,8 @@ jobs:
             type=ref,event=branch
             # Tag with short SHA
             type=sha,prefix=
-            # Tag 'latest' only on main
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # Tag 'latest' only on master
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             # Tag with timestamp for unique versioning
             type=raw,value=${{ github.ref_name }}-{{date 'YYYYMMDD-HHmmss'}}
 
