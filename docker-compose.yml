@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: cicd_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: siraj
+      POSTGRES_PASSWORD: hello
     ports:
       - "5432:5432"
     volumes:
@@ -25,7 +25,7 @@ services:
       SPRING_PROFILES_ACTIVE: test
       SPRING_DATASOURCE_URL: jdbc:postgresql://database:5432/cicd_db
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: siraj
+      SPRING_DATASOURCE_PASSWORD: hello
     depends_on:
       - database
     networks:
