@@ -130,6 +130,9 @@ jobs:
       - name: "🧪 Run tests"
         run: ./mvnw test --no-transfer-progress -Dspring.profiles.active=test
 
+      - name: "📈 Verify code coverage (JaCoCo)"
+        run: ./mvnw jacoco:check --no-transfer-progress || echo "⚠️ Coverage below 70% threshold"
+
       - name: "📊 Upload test reports"
         if: always()
         uses: actions/upload-artifact@v4
@@ -191,5 +194,4 @@ jobs:
       # - name: "🐛 SpotBugs static analysis"
       #   run: ./mvnw spotbugs:check --no-transfer-progress
 
-      - name: "📈 Verify code coverage (JaCoCo)"
-        run: ./mvnw jacoco:check --no-transfer-progress || echo "⚠️ Coverage below 70% threshold"
+
