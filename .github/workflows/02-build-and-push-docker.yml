@@ -2,7 +2,7 @@
 # 02-BUILD-AND-PUSH-DOCKER.YML — Build Docker Image & Push to Docker Hub
 # ============================================================================
 # PURPOSE : Package the app as a Docker image, push to Docker Hub
-# ENV     : Runs after CI passes on master or develop
+# ENV     : Runs after CI passes on master or develops
 # TRIGGERS: push to master/develop (after tests pass)
 # ============================================================================
 #
@@ -34,8 +34,9 @@
 name: "Build & Push Docker Image"
 
 on:
-  workflow_dispatch: # Allows manuals triggering from GitHub Actions UI
-  push:
+  workflow_dispatch: # Allows manual triggering from GitHub Actions UI
+  pull_request:
+    types: [closed]
     branches:
       - master
       - develop
@@ -60,6 +61,7 @@ jobs:
   ci-gate:
     name: "🧪 CI Gate — Run Tests"
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     defaults:
       run:
         working-directory: ${{ env.WORKING_DIR }}
