@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: cicd_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: secret
+      POSTGRES_PASSWORD: siraj
     ports:
       - "5432:5432"
     volumes:
@@ -17,6 +17,9 @@ services:
 
   app:
     image: sirajdev007/cicd_pipeline:${IMAGE_TAG:-master}
+    build:
+      context: ./cicd
+      dockerfile: Dockerfile
     container_name: cicd-app
     ports:
       - "8080:8080"
@@ -24,7 +27,7 @@ services:
       SPRING_PROFILES_ACTIVE: test
       SPRING_DATASOURCE_URL: jdbc:postgresql://database:5432/cicd_db
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: secret
+      SPRING_DATASOURCE_PASSWORD: siraj
     depends_on:
       - database
     networks:
