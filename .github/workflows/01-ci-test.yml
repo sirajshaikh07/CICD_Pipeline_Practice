@@ -17,7 +17,7 @@
 # │                       (e.g., a strong random password)              │
 # │                                                                     │
 # │  OPTIONAL (for Slack/email notifications — add later):              │
-# │  SLACK_WEBHOOK_URL  → Slack incoming webhook for CI notifications   │
+# │  SLACK_WEBHOOK_URsL  → Slack incoming webhook for CI notifications   │
 # └─────────────────────────────────────────────────────────────────────┘
 #
 # FUTURE ADDITIONS:
@@ -188,5 +188,3 @@ jobs:
       # TODO: Add SpotBugs or Checkstyle for static analysis
       # - name: "🐛 SpotBugs static analysis"
       #   run: ./mvnw spotbugs:check --no-transfer-progress
-
-
