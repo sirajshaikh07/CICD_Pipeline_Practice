@@ -39,7 +39,6 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
     environment:
       name: test
-      url: "http://${{ secrets.SERVER_HOST }}:8080"
 
     steps:
       - name: "⬇️ Checkout code"
