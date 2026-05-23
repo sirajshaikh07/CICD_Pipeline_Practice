@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  database:
+    image: postgres:16-alpine
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: cicd_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - cicd-net
+
+  app:
+    image: sirajdev007/cicd_pipeline:${IMAGE_TAG:-master}
+    container_name: cicd-app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: test
+      SPRING_DATASOURCE_URL: jdbc:postgresql://database:5432/cicd_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: secret
+    depends_on:
+      - database
+    networks:
+      - cicd-net
+
+volumes:
+  postgres_data:
+
+networks:
+  cicd-net:
+    name: cicd-net
+    driver: bridge
