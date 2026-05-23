@@ -132,9 +132,7 @@ To make these workflows run successfully, you need to add the following secrets 
   * Configures **Docker Buildx** (enabling multi-platform builds and advanced cache mechanisms).
   * Logins securely to Docker Hub registry.
   * Generates structured tags using `docker/metadata-action`:
-    * Tagged with the target branch name (e.g. `develop` or `master`).
-    * Tagged with the short Git commit SHA for exact traceability.
-    * Tagged with a date-timestamp for unique versioning (`branch-YYYYMMDD-HHmmss`).
+    * Tagged with the short Git commit SHA for exact traceability and production references.
     * Tagged with `latest` *only* when merging directly to the `master` branch.
   * Builds the container image using the project `Dockerfile` and pushes it to Docker Hub.
   * Leverages GitHub Actions caching (`type=gha`) for fast, subsequent builds.
