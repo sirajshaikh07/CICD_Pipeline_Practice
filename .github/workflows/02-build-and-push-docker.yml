@@ -154,14 +154,10 @@ jobs:
         with:
           images: ${{ secrets.DOCKERHUB_REPO }}
           tags: |
-            # Tag with branch name
-            type=ref,event=branch
-            # Tag with short SHA
+            # Tag with short SHA (on all branches)
             type=sha,prefix=
             # Tag 'latest' only on master
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
-            # Tag with timestamp for unique versioning
-            type=raw,value=${{ github.ref_name }}-{{date 'YYYYMMDD-HHmmss'}}
 
       # ── Build & Push ──
       - name: "🐳 Build and push Docker image"
