@@ -35,8 +35,7 @@ name: "Build & Push Docker Image"
 
 on:
   workflow_dispatch: # Allows manual triggering from GitHub Actions UI
-  pull_request:
-    types: [closed]
+  push:
     branches:
       - master
       - develop
@@ -61,7 +60,7 @@ jobs:
   ci-gate:
     name: "🧪 CI Gate — Run Tests"
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     defaults:
       run:
         working-directory: ${{ env.WORKING_DIR }}
@@ -156,6 +155,8 @@ jobs:
           tags: |
             # Tag with short SHA (on all branches)
             type=sha,prefix=
+            # Tag with branch name (e.g. develop, master)
+            type=ref,event=branch
             # Tag 'latest' only on master
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
 
